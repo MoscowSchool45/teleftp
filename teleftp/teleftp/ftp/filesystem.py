@@ -36,7 +36,7 @@ class FilesystemDriver(object):
     def get(self, filename):
         raise NotImplementedError()
 
-    def put(self, filename, filedata):
+    def put(self, filename, file_path):
         raise NotImplementedError()
 
 
@@ -97,3 +97,6 @@ class LocalDriver(FilesystemDriver):
             return FilesystemDriver.FILE, file
         else:
             return FilesystemDriver.ERROR, "File not found"
+
+    def put(self, filename, file_path):
+        os.rename(file_path, os.path.join(self.data['cwd'], filename))

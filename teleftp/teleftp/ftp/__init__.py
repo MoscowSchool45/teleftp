@@ -3,9 +3,10 @@ from teleftp.telegram import TelegramBot
 from telegram import ReplyKeyboardMarkup
 from telegram.ext import CommandHandler, MessageHandler, Filters, ConversationHandler
 
-from teleftp.ftp.filesystem import FTPDriver, LocalDriver, FilesystemDriver, FilesystemError, FilesystemAuthError
+import tempfile
+import os.path
 
-from ftplib import FTP, error_perm
+from teleftp.ftp.filesystem import FTPDriver, LocalDriver, FilesystemDriver, FilesystemError, FilesystemAuthError
 
 
 class TelegramBotFileAccess(TelegramBot):
@@ -50,7 +51,19 @@ class TelegramBotFileAccess(TelegramBot):
         return TelegramBotFTP.USERNAME
 
     def command_workflow(self, bot, update, user_data, override_message=None):
-        message = update.message.text if override_message is None else override_message
+        if override_message is not None:
+            message = override_message
+        elif hasattr(update.message, 'document'):
+            message = '.'
+            filename = update.message.document['file_name']
+            file = update.message.document.get_file()
+            file_path = os.path.join(tempfile.mkdtemp(), filename)
+            file.download(file_path)
+            user_data['filesystem'].put(filename, file_path)
+        elif hasattr(update.message, 'text'):
+            message = update.message.text
+        else: #Nothing to do
+            return TelegramBotFTP.WORKFLOW
         if 'filesystem' not in user_data:
             return self.command_start(bot, update)
         answer_type, answer = user_data['filesystem'].get(message)
@@ -67,7 +80,10 @@ class TelegramBotFileAccess(TelegramBot):
                 answer_type = FilesystemDriver.ERROR
                 answer = "Unknown error."
             if answer_type == FilesystemDriver.DIRECTORY:
-                result = "Directory changed."
+                if message != '.':
+                    result = "Directory changed."
+                else:
+                    result = ""
             else:
                 result = "Error: {}".format(answer)
 
@@ -84,7 +100,8 @@ class TelegramBotFileAccess(TelegramBot):
 
                 TelegramBotFTP.PASSWORD: [MessageHandler(Filters.text, self.command_password, pass_user_data=True), ],
 
-                TelegramBotFTP.WORKFLOW: [MessageHandler(Filters.text, self.command_workflow, pass_user_data=True), ],
+                TelegramBotFTP.WORKFLOW: [MessageHandler(Filters.text | Filters.document,
+                                                         self.command_workflow, pass_user_data=True), ],
             },
             fallbacks=[CommandHandler('logout', self.command_logout, pass_user_data=True)]
         )
