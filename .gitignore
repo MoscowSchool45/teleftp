@@ -2,3 +2,6 @@ venv/
 .idea
 *.pyc
 db.sqlite3
+config.json
+/dist/
+/*.egg-info
