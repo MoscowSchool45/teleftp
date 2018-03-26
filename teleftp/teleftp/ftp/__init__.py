@@ -18,8 +18,8 @@ class TelegramBotFileAccess(TelegramBot):
         self.logger.warning('Update "%s" caused error "%s"', update, error)
 
     def command_start(self, bot, update):
-        if 'motd-message' in self.config:
-            update.message.reply_text(self.config['motd-message'])
+        if 'motd-message' in self.config.telegram:
+            update.message.reply_text(self.config.telegram['motd-message'])
         else:
             update.message.reply_text("Please enter username:")
         return TelegramBotFTP.USERNAME
@@ -32,13 +32,13 @@ class TelegramBotFileAccess(TelegramBot):
 
     def command_password(self, bot, update, user_data):
         password = update.message.text
-        user_data['filesystem'] = type(self).driver()
+        user_data['filesystem'] = type(self).driver(config=self.config)
         try:
             user_data['filesystem'].connect(user_data, password)
         except FilesystemError:
             update.message.reply_text("Login failed. Check username and password or try again later.")
             return TelegramBotFTP.USERNAME
-        return self.command_workflow(bot, update, user_data)
+        return self.command_workflow(bot, update, user_data, override_message=".")
 
     def command_logout(self, bot, update, user_data):
         if 'username' in user_data:
@@ -49,12 +49,14 @@ class TelegramBotFileAccess(TelegramBot):
         update.message.reply_text("Logout successful")
         return TelegramBotFTP.USERNAME
 
-    def command_workflow(self, bot, update, user_data):
+    def command_workflow(self, bot, update, user_data, override_message=None):
+        message = update.message.text if override_message is None else override_message
         if 'filesystem' not in user_data:
             return self.command_start(bot, update)
-        message_type, answer = user_data['filesystem'].get(update.message.text)
-        if message_type == FilesystemDriver.FILE:
-            update.message.reply_document(document=answer, filename=update.message.text)
+        answer_type, answer = user_data['filesystem'].get(message)
+        if answer_type == FilesystemDriver.FILE:
+            update.message.reply_document(document=answer, filename=message)
+            message.close()
         else: # Directory, or error
             try:
                 pwd = user_data['filesystem'].pwd()
@@ -62,8 +64,8 @@ class TelegramBotFileAccess(TelegramBot):
             except FilesystemError:
                 pwd = "+++Error. /logout and try again+++"
                 files = []
-                message_type = FilesystemDriver.ERROR
-            if message_type == FilesystemDriver.DIRECTORY:
+                answer_type = FilesystemDriver.ERROR
+            if answer_type == FilesystemDriver.DIRECTORY:
                 result = "Directory changed."
             else:
                 result = "Not found, no permission or other error occured."

@@ -7,8 +7,7 @@ import teleftp.config
 class TestConfigHelperMixin(object):
     @property
     def conf_file_path(self):
-        return path.join(path.dirname(path.dirname(path.dirname(path.realpath(__file__)))),
-                                        "config-example.json")
+        return path.join(path.dirname(path.dirname(path.dirname(path.realpath(__file__)))), "config-example.json")
 
 
 class TestConfig(TestConfigHelperMixin, TestCase):
