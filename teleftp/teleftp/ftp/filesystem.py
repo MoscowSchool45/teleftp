@@ -1,3 +1,7 @@
+import os.path
+import os
+
+
 class FilesystemError(Exception):
     pass
 
@@ -13,16 +17,17 @@ class FilesystemTimeoutError(FilesystemError):
 class FilesystemDriver(object):
     FILE, DIRECTORY, ERROR = range(3)
 
+    def __init__(self, config=None):
+        self.config = config
+        self.data = {}
+
     def connect(self, user_data, password):
         raise NotImplementedError()
 
     def disconnect(self):
         raise NotImplementedError()
 
-    def cd(self, dir):
-        raise NotImplementedError()
-
-    def cd(self):
+    def ls(self):
         raise NotImplementedError()
 
     def pwd(self):
@@ -31,12 +36,67 @@ class FilesystemDriver(object):
     def get(self, filename):
         raise NotImplementedError()
 
-    def put(self, filename, filedata):
+    def put(self, filename, file_path):
         raise NotImplementedError()
 
 
 class FTPDriver(FilesystemDriver):
     pass
 
+
 class LocalDriver(FilesystemDriver):
-    pass
+    def connect(self, user_data, password):
+        try:
+            if not user_data['username'] in self.config.local['authentication']:
+                raise FilesystemAuthError("Wrong username and password combination")
+        except KeyError:
+            raise FilesystemAuthError("No authentication data in server configuration")
+        if self.config.local['authentication'][user_data['username']] != password:
+            raise FilesystemAuthError("Wrong username and password combination")
+        self.data['cwd'] = self.config.local['root_directory']
+
+    def disconnect(self):
+        del self.data['cwd']
+
+    def ls(self):
+        if os.path.exists(self.data['cwd']) and os.path.isdir(self.data['cwd']):
+            return sorted(os.listdir(self.data['cwd']))
+        else:
+            raise FilesystemError("Current working directory disappeared. Try /logout and start over.")
+
+    def pwd(self):
+        return self.data['cwd']
+
+    def get(self, filename):
+        if not os.path.exists(self.data['cwd']) or not os.path.isdir(self.data['cwd']):
+            return FilesystemDriver.ERROR, "Working directory disappeared."
+        if filename == '..':
+            if self.data['cwd'] != self.config.local['root_directory']:
+                file_path = os.path.dirname(self.data['cwd'])
+            else:
+                # Prevent escaping the working directory
+                file_path = self.data['cwd']
+        elif filename == '.':
+            file_path = self.data['cwd']
+        else:
+            file_path = os.path.join(self.data['cwd'], filename)
+        if not os.path.exists(file_path):
+            return FilesystemDriver.ERROR, "File not found."
+        if os.path.isdir(file_path):
+            self.data['cwd'] = file_path
+            return FilesystemDriver.DIRECTORY, self.data['cwd']
+        elif os.path.isfile(file_path):
+            file_size = os.path.getsize(file_path)
+            if 'size-limit' in self.config.ftp and \
+                    self.config.ftp['size-limit'] is not None and \
+                    file_size > self.config.ftp['size-limit']:
+                return FilesystemDriver.ERROR, "File too large to be sent."
+            if file_size == 0:
+                return FilesystemDriver.ERROR, "Empty file."
+            file = open(file_path, 'rb')
+            return FilesystemDriver.FILE, file
+        else:
+            return FilesystemDriver.ERROR, "File not found"
+
+    def put(self, filename, file_path):
+        os.rename(file_path, os.path.join(self.data['cwd'], filename))
