@@ -56,19 +56,20 @@ class TelegramBotFileAccess(TelegramBot):
         answer_type, answer = user_data['filesystem'].get(message)
         if answer_type == FilesystemDriver.FILE:
             update.message.reply_document(document=answer, filename=message)
-            message.close()
+            answer.close()
         else: # Directory, or error
             try:
                 pwd = user_data['filesystem'].pwd()
                 files = user_data['filesystem'].ls()
             except FilesystemError:
-                pwd = "+++Error. /logout and try again+++"
+                pwd = "?"
                 files = []
                 answer_type = FilesystemDriver.ERROR
+                answer = "Unknown error."
             if answer_type == FilesystemDriver.DIRECTORY:
                 result = "Directory changed."
             else:
-                result = "Not found, no permission or other error occured."
+                result = "Error: {}".format(answer)
 
             update.message.reply_text("{}\nCurrent directory: {}\n\n{}".format(result, pwd, "\n".join(files)),
                                       reply_markup=ReplyKeyboardMarkup([[x, ] for x in [".", ".."] + files],

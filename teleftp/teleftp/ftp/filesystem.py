@@ -69,7 +69,7 @@ class LocalDriver(FilesystemDriver):
 
     def get(self, filename):
         if not os.path.exists(self.data['cwd']) or not os.path.isdir(self.data['cwd']):
-            return FilesystemDriver.ERROR, None
+            return FilesystemDriver.ERROR, "Working directory disappeared."
         if filename == '..':
             if self.data['cwd'] != self.config.local['root_directory']:
                 file_path = os.path.dirname(self.data['cwd'])
@@ -81,12 +81,19 @@ class LocalDriver(FilesystemDriver):
         else:
             file_path = os.path.join(self.data['cwd'], filename)
         if not os.path.exists(file_path):
-            return FilesystemDriver.ERROR, None
+            return FilesystemDriver.ERROR, "File not found."
         if os.path.isdir(file_path):
             self.data['cwd'] = file_path
             return FilesystemDriver.DIRECTORY, self.data['cwd']
         elif os.path.isfile(file_path):
+            file_size = os.path.getsize(file_path)
+            if 'size-limit' in self.config.ftp and \
+                    self.config.ftp['size-limit'] is not None and \
+                    file_size > self.config.ftp['size-limit']:
+                return FilesystemDriver.ERROR, "File too large to be sent."
+            if file_size == 0:
+                return FilesystemDriver.ERROR, "Empty file."
             file = open(file_path, 'rb')
             return FilesystemDriver.FILE, file
         else:
-            return FilesystemDriver.ERROR, None
+            return FilesystemDriver.ERROR, "File not found"
