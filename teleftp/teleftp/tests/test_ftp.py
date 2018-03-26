@@ -11,7 +11,6 @@ import tempfile
 import os
 import os.path
 import datetime
-import logging
 
 
 class DummyTelegramBotMixin(object):
@@ -124,6 +123,39 @@ class TestTelegramLocalBot(TestConfigHelperMixin, TestCase):
         os.rmdir(os.path.join(self.temp_dir, "dir1"))
         os.rmdir(self.temp_dir)
 
+    def test_local_bot_filesize_exceeded(self):
+        config = teleftp.config.Config(self.conf_file_path)
+        config.local['root_directory'] = self.temp_dir
+        config.ftp['size-limit'] = 2
+
+        bot = DummyTelegramBotLocal(config)
+        bot.run_until_stopped()
+
+        user = User(1, 'Test', False)
+        chat = Chat(1, 'private')
+
+        bot.message(Update(1, message=Message(
+                        1, user, datetime.datetime.now(), chat, text="/start", bot=bot.dp.bot))
+                    )
+        bot.message(Update(2, message=Message(
+                        2, user, datetime.datetime.now(), chat, text="username1", bot=bot.dp.bot))
+                    )
+        bot.message(Update(3, message=Message(
+                        3, user, datetime.datetime.now(), chat, text="password1", bot=bot.dp.bot))
+                    )
+        bot.clear()
+        # Get file
+        bot.message(Update(7, message=Message(
+                        7, user, datetime.datetime.now(), chat, text="file2.txt", bot=bot.dp.bot))
+                    )
+
+        self.assertListEqual(bot.answers, [
+            (1,'Error: File too large to be sent.\n'
+               'Current directory: {}\n\ndir1\nfile1.txt\nfile2.txt'.format(self.temp_dir))
+        ])
+        bot.clear()
+
+
     def test_local_bot(self):
         config = teleftp.config.Config(self.conf_file_path)
         config.local['root_directory'] = self.temp_dir
@@ -213,4 +245,24 @@ class TestTelegramLocalBot(TestConfigHelperMixin, TestCase):
                     )
 
         self.assertListEqual(bot.answers, [(1, 'file3.txt', b'Test Test Test')])
+        bot.clear()
+        os.remove(os.path.join(self.temp_dir, "file3.txt"))
+
+        # Check logout
+        bot.message(Update(8, message=Message(
+                        8, user, datetime.datetime.now(), chat, text="/logout", bot=bot.dp.bot))
+                    )
+
+        self.assertListEqual(bot.answers, [(1, 'Logout successful')])
+        bot.clear()
+
+        # Check wrong login
+        bot.message(Update(9, message=Message(
+                        9, user, datetime.datetime.now(), chat, text="user", bot=bot.dp.bot))
+                    )
+        bot.clear()
+        bot.message(Update(10, message=Message(
+                        10, user, datetime.datetime.now(), chat, text="password", bot=bot.dp.bot))
+                    )
+        self.assertListEqual(bot.answers, [(1, 'Login failed. Check username and password or try again later.')])
         bot.clear()
