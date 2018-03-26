@@ -1,5 +1,10 @@
 {
   "telegram": {
-    "api-key": "SECRET"
+    "api-key": "SECRET",
+    "proxy-url": "http://127.0.0.1:3128/"
+  },
+  "ftp": {
+    "host": "127.0.0.1",
+    "proxy-url": null
   }
 }
