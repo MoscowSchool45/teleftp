@@ -53,13 +53,22 @@ class TelegramBotFileAccess(TelegramBot):
     def command_workflow(self, bot, update, user_data, override_message=None):
         if override_message is not None:
             message = override_message
-        elif hasattr(update.message, 'document'):
+        elif hasattr(update.message, 'document') and update.message.document is not None:
             message = '.'
             filename = update.message.document['file_name']
             file = update.message.document.get_file()
-            file_path = os.path.join(tempfile.mkdtemp(), filename)
+            temp_dir = tempfile.mkdtemp()
+            file_path = os.path.join(temp_dir, filename)
             file.download(file_path)
             user_data['filesystem'].put(filename, file_path)
+            try:
+                os.rmdir(temp_dir)
+            except OSError:
+                try:
+                    os.remove(file_path)
+                    os.rmdir(temp_dir)
+                except FileNotFoundError:
+                    pass
         elif hasattr(update.message, 'text'):
             message = update.message.text
         else: #Nothing to do
