@@ -2,6 +2,7 @@ from unittest import TestCase
 from telegram import Update, Message, Chat, User, Document, File
 
 from teleftp.tests.test_config import TestConfigHelperMixin
+from teleftp.tests.test_ftp_server import TestFTPServer
 
 import teleftp.config
 import teleftp.ftp
@@ -93,7 +94,6 @@ class DummyTelegramBotMixin(object):
         return self.dp.bot.messages
 
 
-
 class DummyTelegramBotLocal(DummyTelegramBotMixin, teleftp.ftp.TelegramBotLocal):
     def setup_handlers(self):
         teleftp.ftp.TelegramBotLocal.setup_handlers(self)
@@ -104,7 +104,7 @@ class DummyTelegramBotFTP(DummyTelegramBotMixin, teleftp.ftp.TelegramBotFTP):
         teleftp.ftp.TelegramBotFTP.setup_handlers(self)
 
 
-class TestTelegramLocalBot(TestConfigHelperMixin, TestCase):
+class TestTelegramFileBot(TestConfigHelperMixin, TestCase):
     def setUp(self):
         super().setUp()
         self.addCleanup(self.clean_temp_dir)
@@ -115,6 +115,15 @@ class TestTelegramLocalBot(TestConfigHelperMixin, TestCase):
         with open(os.path.join(self.temp_dir, "file2.txt"), 'w') as f:
             f.write("Test")
 
+        self.addCleanup(self.clean_ftp)
+        self.ftp_server = TestFTPServer()
+
+        self.ftp_server.start()
+
+
+    def clean_ftp(self):
+        self.ftp_server.stop()
+
     def clean_temp_dir(self):
         os.remove(os.path.join(self.temp_dir, "file1.txt"))
         os.remove(os.path.join(self.temp_dir, "file2.txt"))
@@ -124,11 +133,17 @@ class TestTelegramLocalBot(TestConfigHelperMixin, TestCase):
         os.rmdir(self.temp_dir)
 
     def test_local_bot_filesize_exceeded(self):
+        self._test_bot_filesize_exceeded(DummyTelegramBotLocal, self.temp_dir)
+
+    def test_ftp_bot_filesize_exceeded(self):
+        self._test_bot_filesize_exceeded(DummyTelegramBotFTP, "/")
+
+    def _test_bot_filesize_exceeded(self, bot_type, root_dir):
         config = teleftp.config.Config(self.conf_file_path)
         config.local['root_directory'] = self.temp_dir
         config.ftp['size-limit'] = 2
 
-        bot = DummyTelegramBotLocal(config)
+        bot = bot_type(config)
         bot.run_until_stopped()
 
         user = User(1, 'Test', False)
@@ -151,15 +166,21 @@ class TestTelegramLocalBot(TestConfigHelperMixin, TestCase):
 
         self.assertListEqual(bot.answers, [
             (1,'Error: File too large to be sent.\n'
-               'Current directory: {}\n\ndir1\nfile1.txt\nfile2.txt'.format(self.temp_dir))
+               'Current directory: {}\n\ndir1\nfile1.txt\nfile2.txt'.format(root_dir))
         ])
         bot.clear()
 
     def test_local_bot(self):
+        self._test_bot(DummyTelegramBotLocal, self.temp_dir)
+
+    def test_ftp_bot(self):
+        self._test_bot(DummyTelegramBotFTP, '/')
+
+    def _test_bot(self, bot_type, root_dir):
         config = teleftp.config.Config(self.conf_file_path)
         config.local['root_directory'] = self.temp_dir
 
-        bot = DummyTelegramBotLocal(config)
+        bot = bot_type(config)
         bot.run_until_stopped()
 
         user = User(1, 'Test', False)
@@ -183,7 +204,7 @@ class TestTelegramLocalBot(TestConfigHelperMixin, TestCase):
                         3, user, datetime.datetime.now(), chat, text="password1", bot=bot.dp.bot))
                     )
         self.assertListEqual(bot.answers, [
-            (1, "\nCurrent directory: {}\n\ndir1\nfile1.txt\nfile2.txt".format(self.temp_dir)),
+            (1, "\nCurrent directory: {}\n\ndir1\nfile1.txt\nfile2.txt".format(root_dir)),
         ])
         bot.clear()
 
@@ -192,7 +213,7 @@ class TestTelegramLocalBot(TestConfigHelperMixin, TestCase):
                         4, user, datetime.datetime.now(), chat, text="dir1", bot=bot.dp.bot))
                     )
         self.assertListEqual(bot.answers, [
-            (1, "Directory changed.\nCurrent directory: {}\n\n".format(os.path.join(self.temp_dir, 'dir1'))),
+            (1, "Directory changed.\nCurrent directory: {}\n\n".format(os.path.join(root_dir, 'dir1'))),
         ])
         bot.clear()
 
@@ -204,8 +225,8 @@ class TestTelegramLocalBot(TestConfigHelperMixin, TestCase):
                         6, user, datetime.datetime.now(), chat, text="..", bot=bot.dp.bot))
                     )
         self.assertListEqual(bot.answers, [
-            (1, "Directory changed.\nCurrent directory: {}\n\ndir1\nfile1.txt\nfile2.txt".format(self.temp_dir)),
-            (1, "Directory changed.\nCurrent directory: {}\n\ndir1\nfile1.txt\nfile2.txt".format(self.temp_dir)),
+            (1, "Directory changed.\nCurrent directory: {}\n\ndir1\nfile1.txt\nfile2.txt".format(root_dir)),
+            (1, "Directory changed.\nCurrent directory: {}\n\ndir1\nfile1.txt\nfile2.txt".format(root_dir)),
         ])
         bot.clear()
 
@@ -222,9 +243,7 @@ class TestTelegramLocalBot(TestConfigHelperMixin, TestCase):
                         8, user, datetime.datetime.now(), chat, text="file3.txt", bot=bot.dp.bot))
                     )
 
-        self.assertListEqual(bot.answers, [
-            (1, "Error: File not found.\nCurrent directory: {}\n\ndir1\nfile1.txt\nfile2.txt".format(self.temp_dir)),
-        ])
+        self.assertIn("Error: File not found", bot.answers[0][1])
         bot.clear()
 
         # Put a file
@@ -234,7 +253,7 @@ class TestTelegramLocalBot(TestConfigHelperMixin, TestCase):
                         9, user, datetime.datetime.now(), chat, text="", document=document, bot=bot.dp.bot))
                     )
         self.assertListEqual(bot.answers, [
-            (1, "\nCurrent directory: {}\n\ndir1\nfile1.txt\nfile2.txt\nfile3.txt".format(self.temp_dir)),
+            (1, "\nCurrent directory: {}\n\ndir1\nfile1.txt\nfile2.txt\nfile3.txt".format(root_dir)),
         ])
         bot.clear()
 
@@ -245,7 +264,8 @@ class TestTelegramLocalBot(TestConfigHelperMixin, TestCase):
 
         self.assertListEqual(bot.answers, [(1, 'file3.txt', b'Test Test Test')])
         bot.clear()
-        os.remove(os.path.join(self.temp_dir, "file3.txt"))
+        if os.path.exists(os.path.join(self.temp_dir, "file3.txt")):
+            os.remove(os.path.join(self.temp_dir, "file3.txt"))
 
         # Check logout
         bot.message(Update(8, message=Message(
