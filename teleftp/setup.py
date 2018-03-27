@@ -18,5 +18,6 @@ setup(name='teleftp',
     packages=['teleftp'],
     install_requires=[
         'python-telegram-bot',
+        'pyftpdlib'
     ],
     zip_safe=False)

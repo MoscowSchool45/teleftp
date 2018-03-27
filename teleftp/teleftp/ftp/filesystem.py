@@ -1,5 +1,8 @@
 import os.path
 import os
+import io
+
+from ftplib import FTP, error_perm
 
 
 class FilesystemError(Exception):
@@ -41,7 +44,53 @@ class FilesystemDriver(object):
 
 
 class FTPDriver(FilesystemDriver):
-    pass
+    def connect(self, user_data, password):
+        self.data['ftp'] = FTP()
+        self.data['ftp'].connect(self.config.ftp['host'], self.config.ftp['port'])
+        try:
+            self.data['ftp'].login(user_data['username'], password)
+            self.data['ftp'].pwd()  # Try a command to see if we're in
+        except error_perm:
+            raise FilesystemAuthError("Couldn't authenticate")
+
+    def disconnect(self):
+        self.data['ftp'].quit()
+        del self.data['ftp']
+
+    def ls(self):
+        return sorted(self.data['ftp'].nlst())
+        # todo: errors, timeout, etc
+
+    def pwd(self):
+        return self.data['ftp'].pwd()
+
+    def get(self, filename):
+        try:
+            self.data['ftp'].cwd(filename)
+            return FilesystemDriver.DIRECTORY, filename
+        except error_perm:
+            try:
+                self.data['ftp'].voidcmd("TYPE I")
+                file_size = self.data['ftp'].size(filename)
+                if file_size is None:
+                    return FilesystemDriver.ERROR, "File not found."
+                elif 'size-limit' in self.config.ftp and \
+                        self.config.ftp['size-limit'] is not None and \
+                        file_size > self.config.ftp['size-limit']:
+                    return FilesystemDriver.ERROR, "File too large to be sent."
+                io_buffer = io.BytesIO()
+                self.data['ftp'].retrbinary('RETR {}'.format(filename), io_buffer.write)
+                io_return_buffer = io.BytesIO(io_buffer.getvalue())
+                return FilesystemDriver.FILE, io_return_buffer
+            except error_perm:
+                return FilesystemDriver.ERROR, "File not found or you lack permissions"
+
+    def put(self, filename, file_path):
+        try:
+            with open(file_path, 'rb') as f:
+                self.data['ftp'].storbinary("STOR {}".format(filename), f)
+        except error_perm:
+            pass
 
 
 class LocalDriver(FilesystemDriver):
