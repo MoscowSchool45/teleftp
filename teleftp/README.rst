@@ -28,3 +28,9 @@ Configuration
 
 Sample configuration file is included here: `config-example.json <https://github.com/MoscowSchool45/teleftp/blob/develop/teleftp/config-example.json>`_.
 
+Known issues
+^^^^^^^^^^^^
+
+* FTP session objects are stored forever, no timeout
+* No support for FTP proxies
+* Insecure password communication needs to be reworked (probably using a link to web page over https and password field)
