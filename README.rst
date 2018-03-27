@@ -26,7 +26,7 @@ To use from your own code: ::
 Configuration
 ^^^^^^^^^^^^^
 
-Sample configuration file is included here: `config-example.json <https://github.com/MoscowSchool45/teleftp/blob/develop/teleftp/config-example.json>`_.
+Sample configuration file is included here: `config-example.json <https://github.com/MoscowSchool45/teleftp/blob/master/config-example.json>`_.
 
 Known issues
 ^^^^^^^^^^^^
