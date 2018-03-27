@@ -52,7 +52,7 @@ class DummyTelegramBotMixin(object):
 
         @property
         def username(self):
-            return ("bot")
+            return "bot"
 
         def send_message(self, *args, **kwargs):
             self.messages.append(args)
@@ -154,7 +154,6 @@ class TestTelegramLocalBot(TestConfigHelperMixin, TestCase):
                'Current directory: {}\n\ndir1\nfile1.txt\nfile2.txt'.format(self.temp_dir))
         ])
         bot.clear()
-
 
     def test_local_bot(self):
         config = teleftp.config.Config(self.conf_file_path)

@@ -1,5 +1,6 @@
 import os.path
 import os
+from ftplib import FTP, error_perm
 
 
 class FilesystemError(Exception):
@@ -41,7 +42,32 @@ class FilesystemDriver(object):
 
 
 class FTPDriver(FilesystemDriver):
-    pass
+    def connect(self, user_data, password):
+        self.data['ftp'] = FTP(self.config.ftp['host'])
+        try:
+            self.data['ftp'].login(user_data['username'], password)
+            pwd = user_data['ftp'].pwd()
+        except error_perm:
+            raise FilesystemAuthError("Couldn't authenticate")
+
+    def disconnect(self):
+        self.data['ftp'].quit()
+        del self.data['ftp']
+
+    def ls(self):
+        return sorted(self.data['ftp'].nlst())
+        # todo: errors, timeout, etc
+
+    def pwd(self):
+        return self.data['ftp'].pwd()
+
+    def get(self, filename):
+        try:
+            self.data['ftp'].cwd(filename)
+            return FilesystemDriver.DIRECTORY, filename
+        except error_perm:
+            self.data['ftp'].retrlines("LIST {}".format(filename))
+            
 
 
 class LocalDriver(FilesystemDriver):
