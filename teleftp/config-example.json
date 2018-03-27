@@ -1,0 +1,17 @@
+{
+  "telegram": {
+    "api-key": "SECRET",
+    "proxy-url": "http://127.0.0.1:3128/"
+  },
+  "ftp": {
+    "host": "127.0.0.1",
+    "port": 2121,
+    "size-limit": null
+  },
+  "local": {
+    "authentication": {
+      "username1": "password1"
+    },
+    "root_directory": "."
+  }
+}
